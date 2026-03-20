@@ -46,6 +46,8 @@ app.post('/api/chat', async (req, res) => {
     const searchResults = fuse.search(latestUserMessage);
     const topResults = searchResults.slice(0, 5).map(result => result.item);
 
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
     // Provide only the injected TOP 5 results to Gemini instead of the whole file
     const systemInstruction = `
 You are a customer support routing assistant for DelyvaNow.
@@ -63,16 +65,14 @@ KNOWLEDGE BASE DATA (Top Relevant Results Only):
 ${JSON.stringify(topResults)}
     `;
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-    // Gemma 3 does not support systemInstruction config, so append it to the last user message
+    // Gemma/Gemini fallback appending system Instruction
     if (history.length > 0) {
       history[history.length - 1].parts[0].text = systemInstruction + '\n\nUSER QUESTION:\n' + history[history.length - 1].parts[0].text;
     }
 
-    // Call Gemma 3 27B Intruct model
+    // Call Gemini 3.1 Flash Lite
     const response = await ai.models.generateContent({
-      model: 'text-embedding-004',
+      model: 'gemini-3.1-flash-lite-preview',
       contents: history
     });
 
