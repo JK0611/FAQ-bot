@@ -39,7 +39,9 @@ export default function App() {
     });
 
     try {
-      const res = await fetch('/api/chat', {
+      // Fallback to relative URL if VITE_API_URL isn't set, otherwise use the env var
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const res = await fetch(`${apiUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ history: geminiHistory })

@@ -5,6 +5,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig(({ mode }) => {
   return {
+    base: '/FAQ-bot/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
