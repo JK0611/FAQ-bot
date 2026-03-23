@@ -8,14 +8,13 @@ async function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-
 async function runTests() {
     console.log(`Starting automated test for ${kbData.length} questions...`);
     console.log(`Note: A 4.1 second delay is added between questions to respect the 15 RPM Gemini API limit.\n`);
 
     let passed = 0;
     let failed = 0;
-    
+
     // Test a sample of 15 questions across different categories to keep it fast but comprehensive
     // If you want to test ALL 84, just remove the .filter and slice.
     // I am selecting every 5th question to get a diverse spread of 17 questions.
@@ -26,7 +25,7 @@ async function runTests() {
         const item = questionsToTest[i];
         const question = item.title;
         const expectedUrl = item.url;
-        
+
         try {
             const res = await fetch('http://localhost:3001/api/chat', {
                 method: 'POST',
@@ -37,7 +36,7 @@ async function runTests() {
             });
 
             const data = await res.json();
-            
+
             if (data.error) {
                 console.error(`[FAIL] Q: "${question}" -> API Error: ${data.error}`);
                 failed++;
@@ -47,7 +46,7 @@ async function runTests() {
             } else {
                 console.warn(`[WARN] Q: "${question}" -> Bot replied, but didn't include the exact expected URL. Reply: ${data.text.trim().substring(0, 60)}...`);
                 // Counting as warn/pass since generative AI might format URLs slightly differently or find a closely related one.
-                passed++; 
+                passed++;
             }
         } catch (e) {
             console.error(`[FAIL] Q: "${question}" -> Network/Crash: ${e.message}`);
@@ -62,7 +61,7 @@ async function runTests() {
     console.log(`TOTAL TESTED : ${questionsToTest.length}`);
     console.log(`PASSED       : ${passed}`);
     console.log(`FAILED       : ${failed}`);
-    
+
     if (failed === 0) {
         console.log(`\n✅ ALL FEATURES & RAG LOGIC WORKING PERFECTLY WITH GEMINI 3.1 FLASH LITE!`);
     } else {
