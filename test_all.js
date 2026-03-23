@@ -8,6 +8,7 @@ async function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+
 async function runTests() {
     console.log(`Starting automated test for ${kbData.length} questions...`);
     console.log(`Note: A 4.1 second delay is added between questions to respect the 15 RPM Gemini API limit.\n`);
