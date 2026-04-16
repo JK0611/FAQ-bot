@@ -8,9 +8,7 @@ async function run() {
     const list = await ai.models.list();
     // In SDK 1.29.0, it might return an async iterator
     for await (const model of list) {
-        if (model.name.includes("flash") || model.name.toLowerCase().includes("lite") || model.name.includes("3.1")) {
-            console.log(model.name);
-        }
+        console.log(model.name);
     }
   } catch (e) {
     console.log("Error:", e.message);
