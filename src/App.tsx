@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from './firebase';
 import { Send, Bot, User, Loader2, Sparkles, ThumbsUp, ThumbsDown, ChevronUp } from 'lucide-react';
 import { Scrollbars } from 'react-custom-scrollbars-2';
 
@@ -33,6 +35,49 @@ export default function App() {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
+
+  const getOrSetSessionId = () => {
+    let sid = localStorage.getItem('chat_session_id');
+    if (!sid) {
+      sid = crypto.randomUUID();
+      localStorage.setItem('chat_session_id', sid);
+    }
+    return sid;
+  };
+
+  // Load chat history on mount
+  useEffect(() => {
+    if (!db) return;
+    const loadHistory = async () => {
+      try {
+        const docRef = doc(db, 'sessions', getOrSetSessionId());
+        const snap = await getDoc(docRef);
+        if (snap.exists() && snap.data().history) {
+          setMessages(snap.data().history);
+        }
+      } catch (e) {
+        console.error("Firebase history load error:", e);
+      }
+    };
+    loadHistory();
+  }, []);
+
+  // Save chat history automatically when messages change
+  useEffect(() => {
+    if (!db || messages.length <= 1) return;
+    const saveHistory = async () => {
+      try {
+        const docRef = doc(db, 'sessions', getOrSetSessionId());
+        await setDoc(docRef, { 
+          history: messages, 
+          updatedAt: new Date().toISOString() 
+        }, { merge: true });
+      } catch (e) {
+        console.error("Firebase history save error:", e);
+      }
+    };
+    saveHistory();
+  }, [messages]);
 
   useEffect(() => {
     scrollToBottom();

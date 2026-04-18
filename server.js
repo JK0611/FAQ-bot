@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import cors from 'cors';
+import admin from 'firebase-admin';
 import Fuse from 'fuse.js';
 
 dotenv.config();
@@ -25,15 +26,45 @@ try {
   console.error("Failed to load kb.json");
 }
 
+// Initialize Firebase Admin gracefully
+let dbAdmin = null;
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    admin.initializeApp({
+      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
+    });
+    dbAdmin = admin.firestore();
+    console.log("Firebase Admin initialized successfully.");
+  } else {
+    console.warn("No FIREBASE_SERVICE_ACCOUNT found in .env. Falling back to local files for DB.");
+  }
+} catch (e) {
+  console.warn("Failed to initialize Firebase Admin:", e.message);
+}
+
 // 2. Load Vector Store
 let vectorStore = [];
 try {
-  vectorStore = JSON.parse(
-    fs.readFileSync(path.resolve('./src/data/vector_store.json'), 'utf-8')
-  );
-  console.log(`Loaded ${vectorStore.length} dense vectors into memory.`);
+  if (dbAdmin) {
+    const snap = await dbAdmin.collection('vector_store').get();
+    if (!snap.empty) {
+      vectorStore = snap.docs.map(d => d.data());
+      console.log(`Loaded ${vectorStore.length} dense vectors from Firebase.`);
+    }
+  }
 } catch (e) {
-  console.warn("Vector store not found yet. It might still be building...");
+  console.warn("Failed to load vectors from Firebase. Trying local...");
+}
+
+if (vectorStore.length === 0) {
+  try {
+    vectorStore = JSON.parse(
+      fs.readFileSync(path.resolve('./src/data/vector_store.json'), 'utf-8')
+    );
+    console.log(`Loaded ${vectorStore.length} dense vectors into memory via local file.`);
+  } catch (e) {
+    console.warn("Vector store not found yet. It might still be building...");
+  }
 }
 
 // Setup Sparse Keyword Matcher (Fuse.js)
@@ -126,39 +157,11 @@ app.post('/api/chat', async (req, res) => {
       .map(x => x.item);
 
     // ----------------------------------------------------
-    // PHASE 3: CROSS-ENCODER RERANKING
+    // PHASE 3: CROSS-ENCODER RERANKING (By-passed for performance)
     // ----------------------------------------------------
-    let bestDocs = hybridTop10.slice(0, 2); // default fallback to top 2 if reranking fails
-
-    if (hybridTop10.length > 0) {
-      try {
-        const rerankPrompt = `
-You are a highly efficient Enterprise Reranker.
-Determine the TOP 2 most relevant articles for fulfilling the user's exact query.
-USER QUERY: "${userQuery}"
-
-CANDIDATE ARTICLES:
-${hybridTop10.map((a, i) => `[${i}] Title: ${a.title}\nSummary: ${a.content.substring(0, 200)}`).join('\n\n')}
-
-Reply STRICTLY with a valid JSON array of the top 2 zero-based indices holding the answer, e.g., [0, 3]. Do NOT write any markdown blocks, just the raw array brackets.`;
-
-        const rerankRes = await ai.models.generateContent({
-          model: 'gemini-1.5-flash',
-          contents: rerankPrompt,
-          config: { responseMimeType: "application/json" }
-        });
-
-        // Parse returned JSON array
-        const textOutput = rerankRes.text.replace(/[\`\n]/g, '').trim(); 
-        const indices = JSON.parse(textOutput);
-        
-        if (Array.isArray(indices) && indices.length > 0) {
-          bestDocs = indices.map(idx => hybridTop10[idx]).filter(Boolean).slice(0, 2);
-        }
-      } catch (rerankErr) {
-        console.warn("Reranking model failed to parse indices. Using fallback RRF top 2.", rerankErr.message);
-      }
-    }
+    // We rely solely on the Reciprocal Rank Fusion (hybridTop10) which provides
+    // mathematically excellent ranking without the 4-30s latency penalty of a second LLM cycle.
+    let bestDocs = hybridTop10.slice(0, 2);
 
     // ----------------------------------------------------
     // PHASE 4: CONTEXT-INJECTED GENERATION
@@ -176,13 +179,7 @@ RULES:
 6. DO NOT make up URLs, hallucinate articles, or use external links outside the provided JSON below.
 
 KNOWLEDGE BASE DATA (Top 2 Exact Matches via Semantic Reranker):
-${JSON.stringify(bestDocs)}
-    `;
-
-    // Overwrite the last history message combining context + the exact question
-    if (history && history.length > 0) {
-      history[history.length - 1].parts[0].text = systemInstruction + '\n\nUSER QUESTION:\n' + userQuery;
-    }
+${JSON.stringify(bestDocs)}`;
 
     // Ensure we handle different model identifiers gracefully
     const mappedModel = selectedModel === "Gemma 4 31B" ? "gemma-4-31b-it" :
@@ -193,7 +190,10 @@ ${JSON.stringify(bestDocs)}
 
     const stream = await ai.models.generateContentStream({
       model: mappedModel,
-      contents: history
+      contents: history,
+      config: {
+        systemInstruction: systemInstruction
+      }
     });
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
