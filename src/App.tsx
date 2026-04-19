@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { Send, Bot, User, Loader2, Sparkles, ThumbsUp, ThumbsDown, ChevronUp } from 'lucide-react';
 import { Scrollbars } from 'react-custom-scrollbars-2';
+import { Analytics } from '@vercel/analytics/react';
 
 export default function App() {
   const [messages, setMessages] = useState<{role: string, text: string, isError?: boolean, feedback?: 'up' | 'down', generationTime?: string}>([
@@ -471,6 +472,7 @@ export default function App() {
         </div>
 
       </div>
+      <Analytics />
     </div>
   );
 }
