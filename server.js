@@ -48,26 +48,27 @@ async function getVectorStore() {
   if (vectorStoreCache) return vectorStoreCache;
   
   let vectorStore = [];
+  
+  // 1. FAST LOCAL PRIORITY (0.05 seconds)
   try {
-    if (dbAdmin) {
+    vectorStore = JSON.parse(
+      fs.readFileSync(path.resolve('./src/data/vector_store.json'), 'utf-8')
+    );
+    console.log(`Loaded ${vectorStore.length} dense vectors via local file (INSTANT).`);
+  } catch (e) {
+    console.warn("Local vector store not found.");
+  }
+
+  // 2. SLOW FIREBASE FALLBACK (2-4 seconds)
+  if (vectorStore.length === 0 && dbAdmin) {
+    try {
       const snap = await dbAdmin.collection('vector_store').get();
       if (!snap.empty) {
         vectorStore = snap.docs.map(d => d.data());
-        console.log(`Loaded ${vectorStore.length} dense vectors from Firebase.`);
+        console.log(`Loaded ${vectorStore.length} dense vectors from Firebase (SLOW).`);
       }
-    }
-  } catch (e) {
-    console.warn("Failed to load vectors from Firebase. Trying local...");
-  }
-
-  if (vectorStore.length === 0) {
-    try {
-      vectorStore = JSON.parse(
-        fs.readFileSync(path.resolve('./src/data/vector_store.json'), 'utf-8')
-      );
-      console.log(`Loaded ${vectorStore.length} dense vectors into memory via local file.`);
     } catch (e) {
-      console.warn("Vector store not found yet. It might still be building...");
+      console.warn("Failed to load vectors from Firebase.");
     }
   }
   

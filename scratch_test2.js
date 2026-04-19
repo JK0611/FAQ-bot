@@ -1,20 +1,17 @@
 async function test() {
+  const start = Date.now();
   try {
-    const res = await fetch('https://faq-bot-w8yp.vercel.app/api/chat', {
+    const res = await fetch('http://localhost:3001/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        history: [
-          { role: 'model', parts: [{ text: "Hello! How can i help you today?" }] },
-          { role: 'user', parts: [{ text: "hello" }] }
-        ],
-        selectedModel: "Gemini 3.1 Flash Lite",
-        inputValue: "hello"
+        history: [{ role: 'user', parts: [{ text: "how to top up?" }] }],
+        selectedModel: "gemini-2.5-flash",
+        inputValue: "how to top up?"
       })
     });
-    console.log("Status:", res.status);
     const text = await res.text();
-    console.log("Body:", text);
+    console.log("Time Taken (ms):", Date.now() - start);
   } catch (e) {
     console.error(e);
   }
